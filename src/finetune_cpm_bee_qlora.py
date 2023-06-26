@@ -192,16 +192,14 @@ def get_model(args):
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
-    
-    print_model_dtype(model)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = apply_quantization(model,quantization_config=quantization_config)
     model.to(device)
 
-    print("*"*30)
-    print("*"*30)
-    print_model_dtype(model)
+    # print("*"*30)
+    # print("*"*30)
+    # print_model_dtype(model)
 
     # cast all non INT8 parameters to fp32
     # for param in model.parameters():
@@ -245,12 +243,14 @@ def get_model(args):
 
 def print_model_dtype(model):
     for name, module in model.named_modules():
-        print("-"*20)
-        print("model name: ", name)
-        try:
-            print('dtype: ', module.weight.dtype) #float16
-        except:
-            print('pass')
+        print("Model name: ", name)
+        
+        if hasattr(module, 'weight') and module.weight is not None:
+            print('Weight dtype: ', module.weight.dtype)
+            
+        if hasattr(module, 'bias') and module.bias is not None:
+            print('Bias dtype: ', module.bias.dtype)
+
         print("-"*20)
 
 def get_optimizer(args, model):
