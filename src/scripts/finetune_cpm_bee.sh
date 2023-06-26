@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 OPTS=""
 OPTS+=" --use-delta"
-OPTS+=" --model-config /root/zhaoyq/CPM-Bee/models/1b/cpm-bee-1b.json"
+OPTS+=" --model-config /root/zhaoyq/models/1b/cpm-bee-1b.json"
 OPTS+=" --dataset /root/zhaoyq/CPM-Bee/tutorials/basic_task_finetune/bin_data/train"
 OPTS+=" --eval_dataset /root/zhaoyq/CPM-Bee/tutorials/basic_task_finetune/bin_data/eval"
 OPTS+=" --epoch 3"
