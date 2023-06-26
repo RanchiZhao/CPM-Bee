@@ -58,7 +58,6 @@ def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name
             # Check if the current key is not in the `modules_to_not_convert`
             # if not any(key in ".".join(current_key_name) for key in modules_to_not_convert):
             if True:
-                # print(22222)
                 # with init_empty_weights():
                 if quantization_config.quantization_method() == "llm_int8":
                     model._modules[name] = bnb.nn.Linear8bitLt(
@@ -69,14 +68,12 @@ def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name
                         threshold=quantization_config.llm_int8_threshold,
                     )
                 else:
-                    # print(33333)
                     if (
                         quantization_config.llm_int8_skip_modules is not None
                         and name in quantization_config.llm_int8_skip_modules
                     ):
                         pass
                     else:
-                        # print(44444)
                         model._modules[name] = bnb.nn.Linear4bit(
                             module.in_features,
                             module.out_features,
