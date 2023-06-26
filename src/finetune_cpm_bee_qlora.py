@@ -135,7 +135,6 @@ def get_keys_to_not_convert(model):
 
     return filtered_module_names
 
-
 def apply_quantization(model, quantization_config, device_map=None):
     # llm_int8_skip_modules = quantization_config.llm_int8_skip_modules
     # load_in_8bit_fp32_cpu_offload = quantization_config.llm_int8_enable_fp32_cpu_offload
@@ -181,11 +180,9 @@ def apply_quantization(model, quantization_config, device_map=None):
 
     return model
 
-
 def get_tokenizer(args):
     tokenizer = CPMBeeTokenizer()
     return tokenizer
-
 
 def get_model(args):
     config = CPMBeeConfig.from_json_file(args.model_config)
@@ -195,13 +192,17 @@ def get_model(args):
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
-        
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#     model.to(device)
-#     model = apply_quantization(model,quantization_config=quantization_config)
-#     model.to(device)
     
-    
+    print_model_dtype(model)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = apply_quantization(model,quantization_config=quantization_config)
+    model.to(device)
+
+    print("*"*30)
+    print("*"*30)
+    print_model_dtype(model)
+
     # cast all non INT8 parameters to fp32
     # for param in model.parameters():
     #     if (param.dtype == torch.float16) or (param.dtype == torch.bfloat16):
@@ -214,13 +215,17 @@ def get_model(args):
         )
         delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
         delta_model.log()
+
+    print("*"*30)
+    print("*"*30)
+    print_model_dtype(model)
         
-    for name, module in model.named_modules():
-        print(name)
-        try:
-            print('dtype: ', module.weight.dtype) #float16
-        except:
-            print('pass')
+    # for name, module in model.named_modules():
+    #     print(name)
+    #     try:
+    #         print('dtype: ', module.weight.dtype) #float16
+    #     except:
+    #         print('pass')
         # if isinstance(module, LoraLayer):
         #     if args.bf16:
         #         module = module.to(torch.bfloat16)
@@ -238,12 +243,21 @@ def get_model(args):
         #         module = module.to(torch.bfloat16)#torch.float32
     return model
 
+def print_model_dtype(model):
+    for name, module in model.named_modules():
+        print("-"*20)
+        print("model name: ", name)
+        try:
+            print('dtype: ', module.weight.dtype) #float16
+        except:
+            print('pass')
+        print("-"*20)
+
 def get_optimizer(args, model):
     optimizer = bmt.optim.AdamOffloadOptimizer(
         model.parameters(), weight_decay=args.weight_decay
     )
     return optimizer
-
 
 def get_learning_rate_scheduler(args, optimizer):
     if args.lr_decay_iters is None:
@@ -256,7 +270,6 @@ def get_learning_rate_scheduler(args, optimizer):
         num_iter=args.start_step,
     )
     return lr_scheduler
-
 
 def setup_model_and_optimizer(args):
     model = get_model(args)
@@ -273,14 +286,12 @@ def setup_model_and_optimizer(args):
     optim_manager.add_optimizer(optimizer, lr_scheduler)
     return tokenizer, model, optimizer, lr_scheduler, optim_manager
 
-
 def initialize():
     args = get_args(finetune=True)
     bmt.init_distributed(seed=args.seed)
     if args.save is not None:
         os.makedirs(args.save, exist_ok=True)
     return args
-
 
 def see_memory(detail=False):
     if detail:
@@ -293,13 +304,11 @@ def see_memory(detail=False):
     torch.cuda.reset_peak_memory_stats()
     return res
 
-
 def add_mem_time(info, mem_usage, tim_usage):
     torch.cuda.synchronize()
     mem_usage[info] = see_memory()
     tim_usage[info] = time.time()
     return mem_usage, tim_usage
-
 
 def evaluation(model, args, tokenizer, loss_func):
     bmt.print_rank("evaluation begins...")
@@ -371,7 +380,6 @@ def evaluation(model, args, tokenizer, loss_func):
 
         overall_loss = torch.stack(eval_losses).mean().item()
     return overall_loss
-
 
 def finetune(
     args,
@@ -608,12 +616,10 @@ def finetune(
                     return
     # end of finetune
 
-
 def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
-
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
 #! /bin/bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=7
 
 OPTS=""
 OPTS+=" --use-delta"
@@ -7,7 +7,7 @@ OPTS+=" --model-config /root/zhaoyq/models/1b/cpm-bee-1b.json"
 OPTS+=" --dataset /root/zhaoyq/CPM-Bee/tutorials/basic_task_finetune/bin_data/train"
 OPTS+=" --eval_dataset /root/zhaoyq/CPM-Bee/tutorials/basic_task_finetune/bin_data/eval"
 OPTS+=" --epoch 3"
-OPTS+=" --batch-size 2"
+OPTS+=" --batch-size 1"
 OPTS+=" --train-iters 2"
 OPTS+=" --save-name /root/zhaoyq/models/1b-finetuned"
 OPTS+=" --max-length 2048"
@@ -22,9 +22,9 @@ OPTS+=" --weight-decay 0.01"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --loss-scale 32768"
 OPTS+=" --start-step 0"
-OPTS+=" --load /root/zhaoyq/CPM-Bee/models/1b/cpm-bee-1b-ckpt.pt"
+OPTS+=" --load /root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin"
 
-CMD="python /root/zhaoyq/CPM-Bee/src/finetune_cpm_bee.py ${OPTS}"
+CMD="python /root/zhaoyq/CPM-Bee/src/finetune_cpm_bee_qlora.py ${OPTS}"
 
 echo ${CMD}
 $CMD
