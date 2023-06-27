@@ -385,6 +385,7 @@ def finetune(
                 model_inspect = bmt.inspect.inspect_model(model, "*")
                 bmt.print_rank(bmt.inspect.format_summary(model_inspect))
                 train_info["model_inspect"] = model_inspect
+                print(train_info)
 
             # write log here
             if args.tensorboard is not None and bmt.rank() == 0:

@@ -187,23 +187,19 @@ def get_tokenizer(args):
 def get_model(args):
     config = CPMBeeConfig.from_json_file(args.model_config)
     model = CPMBee(config)
+
     model.config = config
     if args.load is not None:
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
+    print("model_init: ",see_memory())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = apply_quantization(model,quantization_config=quantization_config)
     model.to(device)
-    # for k,v in model.named_parameters():
-    #     print(k, v.dtype)
-    # exit(0)
-    
-    # time.sleep(100)
-    # print("*"*30)
-    # print("*"*30)
-    # print_model_dtype(model)
+
+    print("after_quan: ",see_memory())
 
     # cast all non INT8 parameters to fp32
     # for param in model.parameters():
@@ -218,8 +214,8 @@ def get_model(args):
         delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
         delta_model.log()
 
-    print("*"*30)
-    print("*"*30)
+    print("after_lora: ",see_memory())
+
     # print_model_dtype(model)
         
     # for name, module in model.named_modules():
@@ -243,6 +239,11 @@ def get_model(args):
         #     if hasattr(module, 'weight'):
         #         # if args.bf16 and module.weight.dtype == torch.float32:
         #         module = module.to(torch.bfloat16)#torch.float32
+    total_param_size = 0
+    for param in model.parameters():
+        total_param_size += param.element_size() * param.nelement()
+    total_param_size = total_param_size / (1024 ** 3)
+    print("total_param_size: ", total_param_size, "GB")
     return model
 
 def print_model_dtype(model):
@@ -422,6 +423,7 @@ def finetune(
         drop_last=args.drop_last,
     )
 
+    print("before epoch: ",see_memory())
     for epoch in range(args.epoch):
         epoch = epoch + 1
         last_data = None
@@ -484,15 +486,12 @@ def finetune(
             mem_usage, tim_usage = add_mem_time("forward", mem_usage, tim_usage)
 
             # ===========
-            print(optimizer.state)
             optim_manager.backward(loss)
             mem_usage, tim_usage = add_mem_time("backward", mem_usage, tim_usage)
-
             # ===========
             grad_norm = optim_manager.clip_grad_norm(optimizer.param_groups, max_norm=1.0)
             optim_manager.step()
             mem_usage, tim_usage = add_mem_time("optim", mem_usage, tim_usage)
-
             # ==========
             iteration_time = tim_usage["optim"] - tim_usage["init"]
             average_time.record(iteration_time)
@@ -586,6 +585,7 @@ def finetune(
                 model_inspect = bmt.inspect.inspect_model(model, "*")
                 bmt.print_rank(bmt.inspect.format_summary(model_inspect))
                 train_info["model_inspect"] = model_inspect
+                print(train_info["mem_usage"])
 
             # write log here
             if args.tensorboard is not None and bmt.rank() == 0:
@@ -624,6 +624,7 @@ def finetune(
 def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
+    print("before finetune:",see_memory())
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
 
 if __name__ == "__main__":
