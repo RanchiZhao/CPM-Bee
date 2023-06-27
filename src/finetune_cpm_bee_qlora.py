@@ -196,7 +196,11 @@ def get_model(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = apply_quantization(model,quantization_config=quantization_config)
     model.to(device)
-
+    # for k,v in model.named_parameters():
+    #     print(k, v.dtype)
+    # exit(0)
+    
+    # time.sleep(100)
     # print("*"*30)
     # print("*"*30)
     # print_model_dtype(model)
@@ -216,7 +220,7 @@ def get_model(args):
 
     print("*"*30)
     print("*"*30)
-    print_model_dtype(model)
+    # print_model_dtype(model)
         
     # for name, module in model.named_modules():
     #     print(name)
@@ -480,6 +484,7 @@ def finetune(
             mem_usage, tim_usage = add_mem_time("forward", mem_usage, tim_usage)
 
             # ===========
+            print(optimizer.state)
             optim_manager.backward(loss)
             mem_usage, tim_usage = add_mem_time("backward", mem_usage, tim_usage)
 
