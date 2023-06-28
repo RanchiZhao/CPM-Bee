@@ -33,6 +33,9 @@ from packaging import version
 from copy import deepcopy
 from transformers import BitsAndBytesConfig
 import torch.nn as nn
+
+import os
+import psutil
 # from accelerate import init_empty_weights
 keep_in_fp32_modules = None
 quantization_config=BitsAndBytesConfig(
@@ -184,27 +187,90 @@ def get_tokenizer(args):
     tokenizer = CPMBeeTokenizer()
     return tokenizer
 
+def see_cpu_memory():
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    return {
+        'resident': round(memory_info.rss / (1024 * 1024 * 1024), 2),  # GB
+        'virtual': round(memory_info.vms / (1024 * 1024 * 1024), 2),  # GB
+    }
+
+from contextlib import contextmanager,ExitStack
+_init_weights = True
+@contextmanager
+def no_init_weights(_enable=True):
+    """
+    Context manager to globally disable weight initialization to speed up loading large models.
+
+    TODO(Patrick): Delete safety argument `_enable=True` at next major version. .
+    """
+    global _init_weights
+    old_init_weights = _init_weights
+    if _enable:
+        _init_weights = False
+    try:
+        yield
+    finally:
+        _init_weights = old_init_weights
+
+from typing import ContextManager
+class ContextManagers:
+    """
+    Wrapper for `contextlib.ExitStack` which enters a collection of context managers. Adaptation of `ContextManagers`
+    in the `fastcore` library.
+    """
+
+    def __init__(self, context_managers: List[ContextManager]):
+        self.context_managers = context_managers
+        self.stack = ExitStack()
+
+    def __enter__(self):
+        for context_manager in self.context_managers:
+            self.stack.enter_context(context_manager)
+
+    def __exit__(self, *args, **kwargs):
+        self.stack.__exit__(*args, **kwargs)
+
+
 def get_model(args):
     config = CPMBeeConfig.from_json_file(args.model_config)
-    model = CPMBee(config)
+    # print("before_model_init: ",see_memory())
+    print("before_init:  ", see_cpu_memory())
+    # from accelerate import init_empty_weights
+    # init_contexts = [no_init_weights(_enable=True)]
+    # init_contexts.append(init_empty_weights())
+    # with ContextManagers(init_contexts):
+    model = CPMBee(config).cpu()
+
+    print("after_init: ", see_cpu_memory())
+    print("after_model_init: ",see_memory())
+
+    model = apply_quantization(model,quantization_config=quantization_config)
+    print("after_quan: ",see_memory())
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
+    model.to(device)
+    print("after_quan_gpu: ",see_memory())
+
+    
 
     model.config = config
     if args.load is not None:
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
-    print("model_init: ",see_memory())
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = apply_quantization(model,quantization_config=quantization_config)
-    model.to(device)
 
-    print("after_quan: ",see_memory())
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # model = apply_quantization(model,quantization_config=quantization_config)
+    # model.to(device)
+
+    print("after_load: ",see_memory())
 
     # cast all non INT8 parameters to fp32
-    # for param in model.parameters():
-    #     if (param.dtype == torch.float16) or (param.dtype == torch.bfloat16):
-    #         param.data = param.data.to(torch.float32)
+    for param in model.parameters():
+        if (param.dtype == torch.float16) or (param.dtype == torch.bfloat16):
+            param.data = param.data.to(torch.float32)
             
     # insert LoRA
     if args.use_delta:

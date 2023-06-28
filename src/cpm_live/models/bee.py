@@ -22,6 +22,16 @@ from ..layers import Encoder, EmbeddingExt, BucketPositionBias
 import bmtrain as bmt
 from ..utils.gradient_shrink import gradient_shrink
 
+def see_memory(detail=False):
+    if detail:
+        res = torch.cuda.memory_summary()
+    else:
+        res = (
+            round(torch.cuda.memory_allocated() / (1024 * 1024 * 1024), 2),
+            round(torch.cuda.max_memory_allocated() / (1024 * 1024 * 1024), 2),
+        )
+    torch.cuda.reset_peak_memory_stats()
+    return res
 
 class CPMBeeInferenceState(TypedDict):
     buffer_position: torch.Tensor
@@ -71,7 +81,7 @@ class CPMBeeConfig(Config):
 
 class CPMBee(bmt.DistributedModule):
     def __init__(self, config: CPMBeeConfig):
-
+        print(see_memory())# 0 
         super().__init__()
 
         self.encoder = Encoder(
@@ -85,7 +95,7 @@ class CPMBee(bmt.DistributedModule):
             dropout_p=config.dropout_p,
             mask_modules=config.mask_modules,
         )
-
+        
         self.input_embedding = EmbeddingExt(
             vocab_size=config.vocab_size,
             embedding_size=config.dim_model,
@@ -100,6 +110,7 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
+        print(see_memory()) #3.93
 
     def forward(
         self,
