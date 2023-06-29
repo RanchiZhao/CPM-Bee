@@ -17,7 +17,7 @@ import torch
 import bmtrain as bmt
 import math
 import torch.nn.functional as F
-
+import bitsandbytes as bnb
 
 class Linear(bmt.DistributedModule):
     def __init__(
@@ -55,3 +55,27 @@ class Linear(bmt.DistributedModule):
             x = F.linear(x, self.weight)
             x = x / math.sqrt(self.dim_in)
         return x
+
+
+class Linear4bit(Linear):
+    def __init__(
+        self,
+        dim_in: int,
+        dim_out: int,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
+    ):
+        super().__init__(dim_in, dim_out, dtype=torch.float32)
+        self.weight = bnb.nn.Params4bit(self.weight.data, requires_grad=False, compress_statistics=compress_statistics, quant_type=quant_type)
+        self.compute_dtype = compute_dtype
+    def forward(self, x: torch.Tensor):
+        # weights are cast automatically as Int8Params, but the bias has to be cast manually
+        if getattr(self.weight, 'quant_state', None) is None:
+            print('FP4 quantization state not initialized. Please call .cuda() or .to(device) on the LinearFP4 layer first.')
+        inp_dtype = x.dtype
+        if self.compute_dtype is not None:
+            x = x.to(self.compute_dtype)
+        out = bnb.matmul_4bit(x, self.weight.t(), bias=None, quant_state=self.weight.quant_state)
+        out = out.to(inp_dtype)
+        return out

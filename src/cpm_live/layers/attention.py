@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 import torch
 import bmtrain as bmt
 import math
-from .linear import Linear
+from .linear import Linear,Linear4bit
 
 
 class Attention(bmt.DistributedModule):
@@ -28,6 +28,10 @@ class Attention(bmt.DistributedModule):
         dim_head: int,
         dtype: torch.dtype = torch.half,
         dropout_p: Optional[float] = None,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ) -> None:
 
         super().__init__()
@@ -35,13 +39,17 @@ class Attention(bmt.DistributedModule):
         self.dim_model = dim_model
         self.num_heads = num_heads
         self.dim_head = dim_head
-
-        self.project_q = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
-        self.project_k = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
-        self.project_v = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
-
-        self.attention_out = Linear(self.num_heads * self.dim_head, self.dim_model, dtype=dtype)
-
+        if load_in_4bit is None or load_in_4bit is False:
+            self.project_q = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
+            self.project_k = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
+            self.project_v = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
+            self.attention_out = Linear(self.num_heads * self.dim_head, self.dim_model, dtype=dtype)
+        else:
+            self.project_q = Linear4bit(self.dim_model, self.num_heads * self.dim_head, compute_dtype, compress_statistics, quant_type)
+            self.project_k = Linear4bit(self.dim_model, self.num_heads * self.dim_head, compute_dtype, compress_statistics, quant_type)
+            self.project_v = Linear4bit(self.dim_model, self.num_heads * self.dim_head, compute_dtype, compress_statistics, quant_type)
+            self.attention_out = Linear4bit(self.num_heads * self.dim_head, self.dim_model, compute_dtype, compress_statistics, quant_type)
+        
         self.softmax = torch.nn.Softmax(dim=-1)
 
         if dropout_p is not None:

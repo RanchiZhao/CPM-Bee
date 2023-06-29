@@ -89,7 +89,9 @@ def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name
                             compress_statistics=quantization_config.bnb_4bit_use_double_quant,
                             quant_type=quantization_config.bnb_4bit_quant_type,
                         )
-                        # new_layer = new_layer.to(device="cuda")  # Move the new layer to the model's device
+                        # new_layer = nn.Linear(module.in_features,module.out_features).to(dtype=torch.float16)
+                        new_layer = new_layer.cuda()
+                        
                         model._modules[name] = new_layer
                         for param_name, param in module.named_parameters():
                             print(f'Parameter shape: {param.shape}\n')
@@ -257,10 +259,11 @@ def get_model(args):
     model = apply_quantization(model,quantization_config=quantization_config)
     print("after_quan: ",see_memory())
 
-    for name, module in model.named_modules():
-        for param_name, param in module.named_parameters():
-            print(f'Parameter shape: {param.shape}\n')
-    exit(0)
+    # for name, module in model.named_modules():
+    #     for param_name, param in module.named_parameters():
+    #         print(f'Parameter shape: {param.shape} parameter dtype: {param.dtype}\n')
+
+    print_model_dtype(model)
     # model.config = config
     # if args.load is not None:
     #     bmt.load(model, args.load)
@@ -276,19 +279,17 @@ def get_model(args):
     print("total_param_size: ", total_param_size, "GB")
     
     with open('/root/zhaoyq/model.txt', 'w') as f:
-    # 遍历模型的所有模块和子模块
         for name, module in model.named_modules():
             f.write(f'Module name: {name}\n')
             f.write(f'Module type: {type(module).__name__}\n')
             
-            # 遍历模块的参数
             for param_name, param in module.named_parameters():
                 f.write(f'Parameter name: {param_name}\n')
                 f.write(f'Parameter shape: {param.shape}\n')
                 f.write(f'Parameter requires_grad: {param.requires_grad}\n')
             
-            f.write('\n')  # 在模块之间添加空行以便更好地阅读
-
+            f.write('\n') 
+    exit(0)
     #bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     
     # cast all non INT8 parameters to fp32

@@ -16,7 +16,7 @@
 from typing import Optional
 import torch
 import bmtrain as bmt
-from .linear import Linear
+from .linear import Linear,Linear4bit
 
 
 class DenseGatedACT(bmt.DistributedModule):
@@ -25,22 +25,43 @@ class DenseGatedACT(bmt.DistributedModule):
         dim_in: int,
         dim_ff: int,
         dtype=torch.half,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
         super().__init__()
+        if load_in_4bit is None or load_in_4bit is False:
+            self.w_0 = Linear(
+                dim_in=dim_in,
+                dim_out=dim_ff,
+                dtype=dtype,
+                scale_before=False,
+            )
 
-        self.w_0 = Linear(
-            dim_in=dim_in,
-            dim_out=dim_ff,
-            dtype=dtype,
-            scale_before=False,
-        )
+            self.w_1 = Linear(
+                dim_in=dim_in,
+                dim_out=dim_ff,
+                dtype=dtype,
+                scale_before=False,
+            )
+        else:
+            self.w_0 = Linear4bit(
+                dim_in=dim_in,
+                dim_out=dim_ff,
+                compute_dtype=compute_dtype, 
+                compress_statistics=compress_statistics, 
+                quant_type=quant_type,
+            )
 
-        self.w_1 = Linear(
-            dim_in=dim_in,
-            dim_out=dim_ff,
-            dtype=dtype,
-            scale_before=False,
-        )
+            self.w_1 = Linear4bit(
+                dim_in=dim_in,
+                dim_out=dim_ff,
+                compute_dtype=compute_dtype, 
+                compress_statistics=compress_statistics, 
+                quant_type=quant_type,
+            )
+
         self.act = torch.nn.GELU()
 
     def forward(self, x: torch.Tensor):
@@ -82,6 +103,10 @@ class FeedForward(bmt.DistributedModule):
         dim_ff: int,
         dtype=torch.half,
         dropout_p: Optional[float] = None,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
 
         super().__init__()
@@ -90,6 +115,10 @@ class FeedForward(bmt.DistributedModule):
             dim_in=dim_model,
             dim_ff=dim_ff,
             dtype=dtype,
+            load_in_4bit=load_in_4bit,
+            compute_dtype=compute_dtype,
+            compress_statistics=compress_statistics,
+            quant_type=quant_type,
         )
 
         if dropout_p is not None:
@@ -97,12 +126,22 @@ class FeedForward(bmt.DistributedModule):
         else:
             self.dropout = None
 
-        self.w_out = Linear(
-            dim_in=dim_ff,
-            dim_out=dim_model,
-            dtype=dtype,
-            scale_before=False,
+        if load_in_4bit is None or load_in_4bit is False:
+            self.w_out = Linear(
+                dim_in=dim_ff,
+                dim_out=dim_model,
+                dtype=dtype,
+                scale_before=False,
+            )
+        else:
+            self.w_out = Linear4bit(
+                dim_in=dim_ff,
+                dim_out=dim_model,
+                compute_dtype=compute_dtype,
+                compress_statistics=compress_statistics,
+                quant_type=quant_type,
         )
+
 
     def forward(self, x: torch.Tensor):
         """
