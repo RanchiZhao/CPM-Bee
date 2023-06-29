@@ -89,6 +89,7 @@ def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name
                             compress_statistics=quantization_config.bnb_4bit_use_double_quant,
                             quant_type=quantization_config.bnb_4bit_quant_type,
                         )
+                        # print(new_layer.weight.dtype)
                         # new_layer = nn.Linear(module.in_features,module.out_features).to(dtype=torch.float16)
                         new_layer = new_layer.cuda()
                         
@@ -254,24 +255,35 @@ def get_model(args):
     model = CPMBee(config)
     print("after_init: ", see_cpu_memory())
     print("after_model_init: ",see_memory())
-    print_model_dtype(model)
-    exit(0)
-    model = apply_quantization(model,quantization_config=quantization_config)
-    print("after_quan: ",see_memory())
 
+    exit(0)
+    # print_model_dtype(model)
+    
+    # model = apply_quantization(model,quantization_config=quantization_config)
+    # print("after_quan: ",see_memory())
     # for name, module in model.named_modules():
     #     for param_name, param in module.named_parameters():
     #         print(f'Parameter shape: {param.shape} parameter dtype: {param.dtype}\n')
 
-    print_model_dtype(model)
-    # model.config = config
-    # if args.load is not None:
-    #     bmt.load(model, args.load)
-    # else:
-    #     bmt.init_parameters(model)
+    total_param_size = 0
+    for param in model.parameters():
+        total_param_size += param.element_size() * param.nelement()
+    total_param_size = total_param_size / (1024 ** 3)
+    print("total_param_size: ", total_param_size, "GB")
+    
+    print_model_dtype(model)  #uint8并且二合一
+    exit(0)
+
+    model.config = config
+    if args.load is not None:
+        bmt.load(model, args.load)
+    else:
+        bmt.init_parameters(model)
 
     print("after_load: ",see_memory())
 
+    print_model_dtype(model)  #uint8并且二合一
+    exit(0)
     total_param_size = 0
     for param in model.parameters():
         total_param_size += param.element_size() * param.nelement()
@@ -289,7 +301,7 @@ def get_model(args):
                 f.write(f'Parameter requires_grad: {param.requires_grad}\n')
             
             f.write('\n') 
-    exit(0)
+    # exit(0)
     #bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     
     # cast all non INT8 parameters to fp32
@@ -306,7 +318,7 @@ def get_model(args):
         delta_model.log()
     print("after_lora: ",see_memory())
 
-    print_model_dtype(model)
+    # print_model_dtype(model)
     # print_model_dtype(model)
         
     # for name, module in model.named_modules():
@@ -335,6 +347,7 @@ def get_model(args):
         total_param_size += param.element_size() * param.nelement()
     total_param_size = total_param_size / (1024 ** 3)
     print("total_param_size: ", total_param_size, "GB")
+    exit(0)
     bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     return model
 
@@ -390,6 +403,22 @@ def initialize():
         os.makedirs(args.save, exist_ok=True)
     return args
 
+def quantize_state_dict():
+
+    # 加载模型 state_dict
+    state_dict = torch.load('model.bin')
+
+    # 查看 state_dict
+    for key, value in state_dict.items():
+        print(key, value.shape)
+
+    # 修改 state_dict
+    state_dict['layer1.weight'] = torch.randn(state_dict['layer1.weight'].shape)
+
+    # 保存修改后的 state_dict
+    torch.save(state_dict, 'new_model.bin')
+
+                
 def see_memory(detail=False):
     if detail:
         res = torch.cuda.memory_summary()
