@@ -41,6 +41,10 @@ class SelfAttentionBlock(bmt.DistributedModule):
         dtype=torch.half,
         eps: float = 1e-6,
         dropout_p: Optional[float] = None,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
 
         super().__init__()
@@ -57,6 +61,10 @@ class SelfAttentionBlock(bmt.DistributedModule):
             dim_head=dim_head,
             dtype=dtype,
             dropout_p=dropout_p,
+            load_in_4bit=load_in_4bit,
+            compute_dtype=compute_dtype,
+            compress_statistics=compress_statistics,
+            quant_type=quant_type,
         )
 
         if dropout_p:
@@ -117,6 +125,10 @@ class FFNBlock(torch.nn.Module):
         dtype=torch.half,
         eps: float = 1e-6,
         dropout_p: Optional[float] = 0,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
         super().__init__()
 
@@ -131,6 +143,10 @@ class FFNBlock(torch.nn.Module):
             dim_ff,
             dtype=dtype,
             dropout_p=dropout_p,
+            load_in_4bit=load_in_4bit,
+            compute_dtype=compute_dtype,
+            compress_statistics=compress_statistics,
+            quant_type=quant_type,
         )
 
         if dropout_p:
@@ -182,6 +198,10 @@ class TransformerBlock(torch.nn.Module):
         dropout_p: Optional[float] = None,
         mask_att: bool = False,
         mask_ffn: bool = False,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
         super().__init__()
         self.mask_att = mask_att
@@ -195,6 +215,10 @@ class TransformerBlock(torch.nn.Module):
                 dtype=dtype,
                 eps=eps,
                 dropout_p=dropout_p,
+                load_in_4bit=load_in_4bit,
+                compute_dtype=compute_dtype,
+                compress_statistics=compress_statistics,
+                quant_type=quant_type,
             )
 
         if not self.mask_ffn:
@@ -204,6 +228,10 @@ class TransformerBlock(torch.nn.Module):
                 dtype=dtype,
                 eps=eps,
                 dropout_p=dropout_p,
+                load_in_4bit=load_in_4bit,
+                compute_dtype=compute_dtype,
+                compress_statistics=compress_statistics,
+                quant_type=quant_type,
             )
 
     def forward(

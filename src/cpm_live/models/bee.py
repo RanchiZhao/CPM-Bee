@@ -58,8 +58,11 @@ class CPMBeeConfig(Config):
         eps=1e-6,
         half: bool = True,
         mask_modules: Optional[List[Tuple[bool, bool]]] = None,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
-
         super().__init__()
         self.dim_model = dim_model
         self.num_heads = num_heads
@@ -77,12 +80,15 @@ class CPMBeeConfig(Config):
             self.dtype = torch.float
         self.vocab_size = vocab_size
         self.mask_modules = mask_modules
+        self.load_in_4bit = load_in_4bit
+        self.compute_dtype = compute_dtype
+        self.compress_statistics = compress_statistics
+        self.quant_type = quant_type
 
 
 class CPMBee(bmt.DistributedModule):
     def __init__(self, config: CPMBeeConfig):
         super().__init__()
-
         self.encoder = Encoder(
             num_layers=config.num_layers,
             dim_model=config.dim_model,
@@ -93,6 +99,10 @@ class CPMBee(bmt.DistributedModule):
             eps=config.eps,
             dropout_p=config.dropout_p,
             mask_modules=config.mask_modules,
+            load_in_4bit = config.load_in_4bit,
+            compute_dtype = config.compute_dtype,
+            compress_statistics = config.compress_statistics,
+            quant_type = config.quant_type
         )
         
         self.input_embedding = EmbeddingExt(
@@ -109,6 +119,7 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
+        
     def forward(
         self,
         input: torch.Tensor,  # (batch, seqlen) int32

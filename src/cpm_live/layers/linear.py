@@ -18,6 +18,10 @@ import bmtrain as bmt
 import math
 import torch.nn.functional as F
 import bitsandbytes as bnb
+import bmtrain as bmt
+from typing import TypeVar,overload,Optional,Union
+from torch import Tensor, device, dtype
+T = TypeVar("T", bound="torch.nn.Module")
 
 class Linear(bmt.DistributedModule):
     def __init__(
@@ -55,8 +59,7 @@ class Linear(bmt.DistributedModule):
             x = F.linear(x, self.weight)
             x = x / math.sqrt(self.dim_in)
         return x
-
-
+    
 class Linear4bit(Linear):
     def __init__(
         self,
@@ -67,7 +70,7 @@ class Linear4bit(Linear):
         quant_type: str = 'fp4',
     ):
         super().__init__(dim_in, dim_out, dtype=torch.float32)
-        self.weight = bnb.nn.Params4bit(self.weight.data, requires_grad=False, compress_statistics=compress_statistics, quant_type=quant_type)
+        self.weight = Params4bit(self.weight.data, requires_grad=False, compress_statistics=compress_statistics, quant_type=quant_type)
         self.compute_dtype = compute_dtype
     def forward(self, x: torch.Tensor):
         # weights are cast automatically as Int8Params, but the bias has to be cast manually
@@ -79,3 +82,68 @@ class Linear4bit(Linear):
         out = bnb.matmul_4bit(x, self.weight.t(), bias=None, quant_state=self.weight.quant_state)
         out = out.to(inp_dtype)
         return out
+
+class Params4bit(bmt.DistributedParameter):
+    def __new__(cls, data=None, requires_grad=True, quant_state=None, blocksize=64, compress_statistics=True, quant_type='fp4'):
+        if data is None:
+            data = torch.empty(0)
+
+        self = super().__new__(cls, data=data, requires_grad=requires_grad)
+        # self = torch.Tensor._make_subclass(cls, data, requires_grad)
+        self.blocksize = blocksize
+        self.compress_statistics = compress_statistics
+        self.quant_type = quant_type
+        self.quant_state = quant_state
+        self.data = data
+        return self
+
+    def cuda(self, device):
+        w = self.data.contiguous().half().cuda(device)
+        # print(w.shape) #torch.Size([1280, 4096])
+        print("---")
+        w_4bit, quant_state = bnb.functional.quantize_4bit(w, blocksize=self.blocksize, compress_statistics=self.compress_statistics, quant_type=self.quant_type)
+        # print(w_4bit.shape) #torch.Size([2621440, 1])
+        self.data = w_4bit
+        self.quant_state = quant_state
+        return self
+
+    @overload
+    def to(self: T, device: Optional[Union[int, device]] = ..., dtype: Optional[Union[dtype, str]] = ..., non_blocking: bool = ...,) -> T:
+        ...
+
+    @overload
+    def to(self: T, dtype: Union[dtype, str], non_blocking: bool = ...) -> T:
+        ...
+
+    @overload
+    def to(self: T, tensor: Tensor, non_blocking: bool = ...) -> T:
+        ...
+
+    def to(self, *args, **kwargs):
+        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(*args, **kwargs)
+
+        if (device is not None and device.type == "cuda" and self.data.device.type == "cpu"):
+            return self.cuda(device)
+        else:
+            s = self.quant_state
+            if s is not None:
+                # make sure the quantization state is on the right device
+                s[0] = s[0].to(device)
+                if self.compress_statistics:
+                    # TODO: refactor this. This is a nightmare
+                    # for 4-bit: 
+                    # state = [qabsmax, input_shape, A.dtype, blocksize, [offset, state2], quant_type]
+                    # state2 = [absmax, input_shape, A.dtype, blocksize, None, quant_type]
+                    #s[-2][0] = s[-2][0].to(device) # offset
+                    #s[-2][1][0] = s[-2][1][0].to(device) # nested absmax
+
+                    # for 8-bit
+                    s[-2][0] = s[-2][0].to(device) # offset
+                    s[-2][1][0] = s[-2][1][0].to(device) # nested quantiation state statitics
+                    s[-2][1][1] = s[-2][1][1].to(device) # nested quantiation codebook
+            new_param = Params4bit(super().to(device=device, dtype=dtype, non_blocking=non_blocking),
+                                  requires_grad=self.requires_grad, quant_state=self.quant_state,
+                                   blocksize=self.blocksize, compress_statistics=self.compress_statistics,
+                                   quant_type=self.quant_type)
+
+            return new_param

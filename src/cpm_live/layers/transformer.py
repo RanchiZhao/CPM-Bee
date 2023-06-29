@@ -46,6 +46,10 @@ class Encoder(bmt.DistributedModule):
         eps: float = 1e-6,
         dropout_p: Optional[float] = None,
         mask_modules: Optional[List[Tuple[bool, bool]]] = None,
+        load_in_4bit: Optional[bool] = None,
+        compute_dtype: torch.dtype = None,
+        compress_statistics: bool = True,
+        quant_type: str = 'fp4',
     ):
 
         super().__init__()
@@ -76,6 +80,10 @@ class Encoder(bmt.DistributedModule):
                         dropout_p=dropout_p,
                         mask_att=mask_modules[ith][0],
                         mask_ffn=mask_modules[ith][1],
+                        load_in_4bit=load_in_4bit,
+                        compute_dtype=compute_dtype,
+                        compress_statistics=compress_statistics,
+                        quant_type=quant_type,
                     )
                 )
                 for ith in range(num_layers)

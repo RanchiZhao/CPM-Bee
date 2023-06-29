@@ -252,10 +252,10 @@ def get_model(args):
     # with ContextManagers(init_contexts):
     
     model = CPMBee(config)
-
     print("after_init: ", see_cpu_memory())
     print("after_model_init: ",see_memory())
-
+    print_model_dtype(model)
+    exit(0)
     model = apply_quantization(model,quantization_config=quantization_config)
     print("after_quan: ",see_memory())
 
@@ -344,7 +344,7 @@ def print_model_dtype(model):
         
         if hasattr(module, 'weight') and module.weight is not None:
             print('Weight dtype: ', module.weight.dtype)
-            
+            print('Weight shape: ', module.weight.shape)
         if hasattr(module, 'bias') and module.bias is not None:
             print('Bias dtype: ', module.bias.dtype)
 
