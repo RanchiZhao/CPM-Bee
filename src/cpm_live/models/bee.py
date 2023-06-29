@@ -81,7 +81,6 @@ class CPMBeeConfig(Config):
 
 class CPMBee(bmt.DistributedModule):
     def __init__(self, config: CPMBeeConfig):
-        print(see_memory())# 0 
         super().__init__()
 
         self.encoder = Encoder(
@@ -110,8 +109,6 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
-        print(see_memory()) #3.93
-
     def forward(
         self,
         input: torch.Tensor,  # (batch, seqlen) int32

@@ -29,3 +29,6 @@ CMD="python /root/zhaoyq/CPM-Bee/src/finetune_cpm_bee_qlora.py ${OPTS}"
 
 echo ${CMD}
 $CMD
+
+#OPTS+=" --load /root/zhaoyq/models/1b/quantized.pt"
+#OPTS+=" --load /root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin"
