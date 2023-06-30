@@ -36,6 +36,8 @@ import torch.nn as nn
 
 import os
 import psutil
+from cpm_live.layers.linear import Params4bit
+from cpm_live.layers.linear import Linear
 # from accelerate import init_empty_weights
 keep_in_fp32_modules = None
 quantization_config=BitsAndBytesConfig(
@@ -49,7 +51,6 @@ quantization_config=BitsAndBytesConfig(
             llm_int8_skip_modules = None
         )
 
-from cpm_live.layers.linear import Linear
 
 def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name=None, quantization_config=None):
     modules_to_not_convert = ["lm_head"] if modules_to_not_convert is None else modules_to_not_convert
@@ -207,42 +208,6 @@ def see_cpu_memory():
         'virtual': round(memory_info.vms / (1024 * 1024 * 1024), 2),  # GB
     }
 
-from contextlib import contextmanager,ExitStack
-_init_weights = True
-@contextmanager
-def no_init_weights(_enable=True):
-    """
-    Context manager to globally disable weight initialization to speed up loading large models.
-
-    TODO(Patrick): Delete safety argument `_enable=True` at next major version. .
-    """
-    global _init_weights
-    old_init_weights = _init_weights
-    if _enable:
-        _init_weights = False
-    try:
-        yield
-    finally:
-        _init_weights = old_init_weights
-
-from typing import ContextManager
-class ContextManagers:
-    """
-    Wrapper for `contextlib.ExitStack` which enters a collection of context managers. Adaptation of `ContextManagers`
-    in the `fastcore` library.
-    """
-
-    def __init__(self, context_managers: List[ContextManager]):
-        self.context_managers = context_managers
-        self.stack = ExitStack()
-
-    def __enter__(self):
-        for context_manager in self.context_managers:
-            self.stack.enter_context(context_manager)
-
-    def __exit__(self, *args, **kwargs):
-        self.stack.__exit__(*args, **kwargs)
-
 def get_model(args):
     config = CPMBeeConfig.from_json_file(args.model_config)
     print("before_model_init: ",see_memory())
@@ -256,23 +221,22 @@ def get_model(args):
     print("after_init: ", see_cpu_memory())
     print("after_model_init: ",see_memory())
 
-    exit(0)
+    # exit(0)
     # print_model_dtype(model)
-    
     # model = apply_quantization(model,quantization_config=quantization_config)
     # print("after_quan: ",see_memory())
     # for name, module in model.named_modules():
     #     for param_name, param in module.named_parameters():
     #         print(f'Parameter shape: {param.shape} parameter dtype: {param.dtype}\n')
 
-    total_param_size = 0
-    for param in model.parameters():
-        total_param_size += param.element_size() * param.nelement()
-    total_param_size = total_param_size / (1024 ** 3)
-    print("total_param_size: ", total_param_size, "GB")
+    # total_param_size = 0
+    # for param in model.parameters():
+    #     total_param_size += param.element_size() * param.nelement()
+    # total_param_size = total_param_size / (1024 ** 3)
+    # print("total_param_size: ", total_param_size, "GB")
     
-    print_model_dtype(model)  #uint8并且二合一
-    exit(0)
+    # print_model_dtype(model)  #uint8并且二合一
+    # exit(0)
 
     model.config = config
     if args.load is not None:
@@ -280,16 +244,8 @@ def get_model(args):
     else:
         bmt.init_parameters(model)
 
-    print("after_load: ",see_memory())
+    # print_model_dtype(model)  #uint8并且二合一
 
-    print_model_dtype(model)  #uint8并且二合一
-    exit(0)
-    total_param_size = 0
-    for param in model.parameters():
-        total_param_size += param.element_size() * param.nelement()
-    total_param_size = total_param_size / (1024 ** 3)
-    print("total_param_size: ", total_param_size, "GB")
-    
     with open('/root/zhaoyq/model.txt', 'w') as f:
         for name, module in model.named_modules():
             f.write(f'Module name: {name}\n')
@@ -299,9 +255,9 @@ def get_model(args):
                 f.write(f'Parameter name: {param_name}\n')
                 f.write(f'Parameter shape: {param.shape}\n')
                 f.write(f'Parameter requires_grad: {param.requires_grad}\n')
-            
+                f.write(f'Parameter: {param[:10]}\n')
             f.write('\n') 
-    # exit(0)
+    exit(0)
     #bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     
     # cast all non INT8 parameters to fp32
@@ -403,22 +359,34 @@ def initialize():
         os.makedirs(args.save, exist_ok=True)
     return args
 
-def quantize_state_dict():
-
-    # 加载模型 state_dict
-    state_dict = torch.load('model.bin')
-
-    # 查看 state_dict
+def show_state_dict(file):
+    state_dict = torch.load(file)
+    print("{:<80} {:<10} {:<10}".format("key", "value.dtype", "value.shape"))
     for key, value in state_dict.items():
-        print(key, value.shape)
+        print("{:<80} {:<10} {:<10}".format(key, str(value.dtype), str(value.shape)))
 
-    # 修改 state_dict
-    state_dict['layer1.weight'] = torch.randn(state_dict['layer1.weight'].shape)
+def quantize_state_dict(file, quantize_save, compress_statistics, quant_type):
+    state_dict = torch.load(file)
+    replace_list = ["project_q", "project_k", "project_v", "attention_out", "w_0", "w_1", "w_out"]
 
-    # 保存修改后的 state_dict
-    torch.save(state_dict, 'new_model.bin')
+    temp_dict = {}
+    for key, value in state_dict.items():
+        if any(word in key for word in replace_list):
+            new_value = Params4bit(value, requires_grad=False, compress_statistics=compress_statistics, quant_type=quant_type).cuda("cuda")
+            # print(new_value.quant_state)
 
-                
+            print(new_value.compress_statistics) #True
+            print(new_value.data.shape) #torch.Size([2097152, 1])
+            print(type(new_value.data)) #<class 'torch.Tensor'>
+            print(new_value.data.dtype) #torch.uint8
+            print(type(new_value)) #<class 'bitsandbytes.nn.modules.Params4bit'>
+            temp_dict[key] = new_value
+    
+    exit(0)
+    state_dict.update(temp_dict)
+    torch.save(state_dict, quantize_save)
+    show_state_dict(quantize_save)
+ 
 def see_memory(detail=False):
     if detail:
         res = torch.cuda.memory_summary()
@@ -753,7 +721,10 @@ def finetune(
 
 def main():
     args = initialize()
+    # quantize_state_dict("/root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin","/root/zhaoyq/models/1b/cpmbee_quantized.bin",True,"nf4")
+    # exit(0)
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
+    exit(0)
     print("before finetune:",see_memory())
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
 
