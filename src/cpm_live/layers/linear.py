@@ -80,7 +80,7 @@ class Linear4bit(bmt.DistributedModule):
             compress_statistics=compress_statistics,
             quant_type=quant_type,   
         )
-        self.weight = bmt.DistributedParameter(weight,requires_grad=False)
+        self.weight = bmt.DistributedParameter(weight,requires_grad=False,quant_state=weight.quant_state)
         self.compute_dtype = compute_dtype
 
     def forward(self, x: torch.Tensor):
@@ -88,8 +88,9 @@ class Linear4bit(bmt.DistributedModule):
         if getattr(self.weight, 'quant_state', None) is None:
             print('FP4 quantization state not initialized. Please call .cuda() or .to(device) on the LinearFP4 layer first.')
         inp_dtype = x.dtype
-        if self.compute_dtype is not None:
-            x = x.to(self.compute_dtype)
+        # 先忽略compute_dtype的问题，因为似乎已经全都是float32,
+        # if self.compute_dtype is not None:
+        #     x = x.to(self.compute_dtype)
         out = bnb.matmul_4bit(x, self.weight.t(), bias=None, quant_state=self.weight.quant_state)
         out = out.to(inp_dtype)
         return out
@@ -160,3 +161,20 @@ class Params4bit(torch.nn.Parameter):
             return new_param
         self.data.copy_(data.view(-1)[self._start_partition : self._end_partition])
     
+
+
+class DistributedParameter4Int8(bmt.DistributedParameter):
+    def __init__(self, 
+                param, 
+                requires_grad=True, 
+                quant_state=None, 
+                blocksize=64, 
+                compress_statistics=True, 
+                quant_type='fp4',
+            ):
+        super().__init__(param,requires_grad)
+        self.quant_state = quant_state
+        self.blocksize = blocksize
+        self.compress_statistics = compress_statistics
+        self.quant_type = quant_type
+

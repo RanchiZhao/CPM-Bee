@@ -240,12 +240,19 @@ def get_model(args):
 
     model.config = config
     if args.load is not None:
-        bmt.load(model, args.load)
+        # bmt.load(model, args.load)
+        state_dict = load_quantize_state_dict(args.load)
+        model.load_state_dict(state_dict)
+        for name, param in model.named_parameters():
+            if name in state_dict and hasattr(state_dict[name], 'quant_state'):
+                param.quant_state = state_dict[name].quant_state
+
     else:
         bmt.init_parameters(model)
 
     # print_model_dtype(model)  #uint8并且二合一
 
+    
     with open('/root/zhaoyq/model.txt', 'w') as f:
         for name, module in model.named_modules():
             f.write(f'Module name: {name}\n')
@@ -256,6 +263,10 @@ def get_model(args):
                 f.write(f'Parameter shape: {param.shape}\n')
                 f.write(f'Parameter requires_grad: {param.requires_grad}\n')
                 f.write(f'Parameter: {param[:10]}\n')
+                try:
+                    f.write(f'quant_state: {param.quant_state}\n')
+                except:
+                    raise ValueError
             f.write('\n') 
     #bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     
@@ -264,14 +275,16 @@ def get_model(args):
     #     if (param.dtype == torch.float16) or (param.dtype == torch.bfloat16):
     #         param.data = param.data.to(torch.float32)
             
-    # insert LoRA
+    insert LoRA
     if args.use_delta:
         delta_model = LoraModel(
             backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt"
         )
         delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
         delta_model.log()
-    print("after_lora: ",see_memory())
+
+    
+    # print("after_lora: ",see_memory())
 
     # print_model_dtype(model)
     # print_model_dtype(model)
@@ -323,7 +336,7 @@ def get_optimizer(args, model):
     # optimizer = bmt.optim.AdamOffloadOptimizer(
     #     model.parameters(), weight_decay=args.weight_decay
     # )
-    optimizer = bmt.optim.Adam8bit(
+    optimizer = bmt.optim.PagedAdamW32bit(
         model.parameters()
     )
     return optimizer
@@ -340,6 +353,7 @@ def get_learning_rate_scheduler(args, optimizer):
     )
     return lr_scheduler
 
+#no lora + QAT
 def setup_model_and_optimizer(args):
     model = get_model(args)
     tokenizer = get_tokenizer(args)
@@ -362,33 +376,59 @@ def initialize():
         os.makedirs(args.save, exist_ok=True)
     return args
 
+def load_quantize_state_dict(quantize_save):
+    checkpoint = torch.load(quantize_save)
+    state_dict = checkpoint["state_dict"]
+    quant_state_dict = checkpoint["quant_state_dict"]
+    for key, value in state_dict.items():
+        if key in quant_state_dict:
+            value.quant_state = quant_state_dict[key]
+
+    # N = 20  # 打印前5个键值对
+    # for i, (key, value) in enumerate(state_dict.items()):
+    #     if i >= N:
+    #         break
+    #     try:
+    #         print(f"{key}: {value.quant_state}")
+    #     except:
+    #         print("still no quant_state")
+    #         pass
+
+
+
+    return state_dict
+
 def show_state_dict(file):
     state_dict = torch.load(file)
     print("{:<80} {:<10} {:<10}".format("key", "value.dtype", "value.shape"))
     for key, value in state_dict.items():
         print("{:<80} {:<10} {:<10}".format(key, str(value.dtype), str(value.shape)))
-
+        try:
+            print(value.quantstate)
+        except:
+            print("no quantstate")
+            pass
+    
 def quantize_state_dict(file, quantize_save, compress_statistics, quant_type):
     state_dict = torch.load(file)
     replace_list = ["project_q", "project_k", "project_v", "attention_out", "w_0", "w_1", "w_out"]
 
     temp_dict = {}
+    quant_state_dict = {}
     for key, value in state_dict.items():
         if any(word in key for word in replace_list):
             new_value = Params4bit(value, requires_grad=False, compress_statistics=compress_statistics, quant_type=quant_type).cuda("cuda")
             # print(new_value.quant_state)
-
             print(new_value.compress_statistics) #True
             print(new_value.data.shape) #torch.Size([2097152, 1])
             print(type(new_value.data)) #<class 'torch.Tensor'>
             print(new_value.data.dtype) #torch.uint8
             print(type(new_value)) #<class 'bitsandbytes.nn.modules.Params4bit'>
             temp_dict[key] = new_value
-    
-    exit(0)
+            quant_state_dict[key] = new_value.quant_state
     state_dict.update(temp_dict)
-    torch.save(state_dict, quantize_save)
-    show_state_dict(quantize_save)
+    torch.save({"state_dict": state_dict, "quant_state_dict": quant_state_dict}, quantize_save)
+    # show_state_dict(quantize_save)
  
 def see_memory(detail=False):
     if detail:
@@ -516,12 +556,12 @@ def finetune(
     )
     print("before epoch: ",see_memory())
 
-    def print_layer_type_and_dtype(module, input, output):
-        print(type(module), input[0].dtype)
+    # def print_layer_type_and_dtype(module, input, output):
+    #     print(type(module), input[0].dtype)
 
-    # hook
-    for module in model.modules():
-        module.register_forward_hook(print_layer_type_and_dtype)
+    # # hook
+    # for module in model.modules():
+    #     module.register_forward_hook(print_layer_type_and_dtype)
 
     for epoch in range(args.epoch):
         epoch = epoch + 1
@@ -680,11 +720,12 @@ def finetune(
                     ]
                 )
             )
-            if iteration % args.inspect_iters == 0:
-                model_inspect = bmt.inspect.inspect_model(model, "*")
-                bmt.print_rank(bmt.inspect.format_summary(model_inspect))
-                train_info["model_inspect"] = model_inspect
-                print(train_info["mem_usage"])
+            # not available for std and var only support floating point and complex dtypes
+            # if iteration % args.inspect_iters == 0:
+            #     model_inspect = bmt.inspect.inspect_model(model, "*")
+            #     bmt.print_rank(bmt.inspect.format_summary(model_inspect))
+            #     train_info["model_inspect"] = model_inspect
+            #     print(train_info["mem_usage"])
 
             # write log here
             if args.tensorboard is not None and bmt.rank() == 0:
@@ -722,8 +763,8 @@ def finetune(
 
 def main():
     args = initialize()
+    # show_state_dict("/root/zhaoyq/models/1b/cpmbee_quantized.bin")
     # quantize_state_dict("/root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin","/root/zhaoyq/models/1b/cpmbee_quantized.bin",True,"nf4")
-    # exit(0)
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
     print("before finetune:",see_memory())
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
