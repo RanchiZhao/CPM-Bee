@@ -257,7 +257,6 @@ def get_model(args):
                 f.write(f'Parameter requires_grad: {param.requires_grad}\n')
                 f.write(f'Parameter: {param[:10]}\n')
             f.write('\n') 
-    exit(0)
     #bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     
     # cast all non INT8 parameters to fp32
@@ -298,13 +297,14 @@ def get_model(args):
         #     if hasattr(module, 'weight'):
         #         # if args.bf16 and module.weight.dtype == torch.float32:
         #         module = module.to(torch.bfloat16)#torch.float32
-    total_param_size = 0
-    for param in model.parameters():
-        total_param_size += param.element_size() * param.nelement()
-    total_param_size = total_param_size / (1024 ** 3)
-    print("total_param_size: ", total_param_size, "GB")
-    exit(0)
-    bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
+
+    # total_param_size = 0
+    # for param in model.parameters():
+    #     total_param_size += param.element_size() * param.nelement()
+    # total_param_size = total_param_size / (1024 ** 3)
+    # print("total_param_size: ", total_param_size, "GB")
+
+    # bmt.save(model, "/root/zhaoyq/models/1b/quantized.pt")
     return model
 
 def print_model_dtype(model):
@@ -320,8 +320,11 @@ def print_model_dtype(model):
         print("-"*20)
 
 def get_optimizer(args, model):
-    optimizer = bmt.optim.AdamOffloadOptimizer(
-        model.parameters(), weight_decay=args.weight_decay
+    # optimizer = bmt.optim.AdamOffloadOptimizer(
+    #     model.parameters(), weight_decay=args.weight_decay
+    # )
+    optimizer = bmt.optim.Adam8bit(
+        model.parameters()
     )
     return optimizer
 
@@ -484,7 +487,6 @@ def finetune(
     lr_scheduler: bmt.lr_scheduler.WarmupLRScheduler,
     optim_manager: bmt.optim.OptimManager,
 ):
-
     average_time = bmt.utils.AverageRecorder()
     if model.config.dtype == torch.half:
         loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
@@ -512,7 +514,6 @@ def finetune(
         task_name=args.task_name,
         drop_last=args.drop_last,
     )
-
     print("before epoch: ",see_memory())
 
     def print_layer_type_and_dtype(module, input, output):
@@ -724,7 +725,6 @@ def main():
     # quantize_state_dict("/root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin","/root/zhaoyq/models/1b/cpmbee_quantized.bin",True,"nf4")
     # exit(0)
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
-    exit(0)
     print("before finetune:",see_memory())
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
 

@@ -1,5 +1,5 @@
 #! /bin/bash
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=0
 
 OPTS=""
 OPTS+=" --use-delta"
@@ -22,7 +22,7 @@ OPTS+=" --weight-decay 0.01"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --loss-scale 32768"
 OPTS+=" --start-step 0"
-OPTS+=" --load /root/zhaoyq/models/1b/cpmbee_quantized.bin"
+OPTS+=" --load /root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin"
 OPTS+=" --tensorboard /root/zhaoyq/tensorboard_log/qlora"
 
 CMD="python /root/zhaoyq/CPM-Bee/src/finetune_cpm_bee_qlora.py ${OPTS}"

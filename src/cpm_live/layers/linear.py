@@ -71,6 +71,8 @@ class Linear4bit(bmt.DistributedModule):
         quant_type: str = 'fp4',
     ):
         super().__init__()
+        self.dim_in = self.in_features = dim_in
+        self.dim_out = self.out_features = dim_out
         #初始化一个
         weight = Params4bit(
             data=torch.empty((dim_out * dim_in // 2, 1), dtype=torch.uint8),
