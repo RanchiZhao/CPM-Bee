@@ -334,7 +334,10 @@ def get_optimizer(args, model):
     # optimizer = bmt.optim.AdamOffloadOptimizer(
     #     model.parameters(), weight_decay=args.weight_decay
     # )
-    optimizer = bmt.optim.PagedAdamW32bit(
+    # optimizer = bmt.optim.PagedAdamW32bit(
+    #     model.parameters()
+    # )
+    optimizer = bmt.optim.PagedAdamW8bit(
         model.parameters()
     )
     return optimizer
