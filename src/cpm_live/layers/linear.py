@@ -18,7 +18,7 @@ import bmtrain as bmt
 import math
 import torch.nn.functional as F
 import bitsandbytes as bnb
-from typing import TypeVar,overload,Optional,Union,Callable
+from typing import TypeVar,overload,Optional,Union,Callable,Any
 from torch import Tensor, device, dtype
 from bmtrain.utils import round_up
 from bmtrain.global_var import config
@@ -80,7 +80,7 @@ class Linear4bit(bmt.DistributedModule):
             compress_statistics=compress_statistics,
             quant_type=quant_type,   
         )
-        self.weight = bmt.DistributedParameter(weight,requires_grad=False,quant_state=weight.quant_state)
+        self.weight = DistributedParameter4Int8(weight,requires_grad=False,quant_state=weight.quant_state)
         self.compute_dtype = compute_dtype
 
     def forward(self, x: torch.Tensor):
@@ -166,17 +166,71 @@ class Params4bit(torch.nn.Parameter):
 
 
 class DistributedParameter4Int8(bmt.DistributedParameter):
-    def __init__(self, 
-                param, 
-                requires_grad=True, 
-                quant_state=None, 
-                blocksize=64, 
-                compress_statistics=True, 
-                quant_type='fp4',
-            ):
-        super().__init__(param,requires_grad)
-        self.quant_state = quant_state
-        self.blocksize = blocksize
-        self.compress_statistics = compress_statistics
-        self.quant_type = quant_type
+    r"""
+    DistributedParameter is a subclass of torch.nn.Parameter.
 
+    It scatters the tensor to all the nodes and gathers them when needed.
+
+    Args:
+        data (Tensor): parameter tensor.
+        requires_grad (bool, optional): if the parameter requires gradient.
+        init_method (Callable[['DistributedParameter'], None], optional): the method to initialize the parameter.
+        group (str, optional): the group name of the parameter.
+
+    **Note**: DistributedParameter must be on the CUDA device. It will transfer the data to device automatically when `__init__` called.
+
+    """
+    
+    _original_shape : torch.Size
+    _start_partition : int
+    _end_partition : int
+    _init_method : Optional[Callable[['DistributedParameter'], None]]
+    _in_checkpoint_block : bool
+    _group : Optional[str]
+
+    def __new__(cls,
+            data : torch.Tensor, 
+            requires_grad : bool = True, 
+            init_method : Optional[Callable[['DistributedParameter'], None]] = None,
+            group : Optional[str] = None,
+            quant_state : Optional[Any] = None
+        ):
+        if not config["initialized"]:
+            raise RuntimeError("BMTrain is not initialized")
+
+        num_of_elements = data.numel()
+
+        cuda_tensor = torch.tensor([], dtype=data.dtype, device="cuda") 
+        cuda_storage_size = round_up(num_of_elements, config["world_size"]) // config["world_size"]
+
+        original_shape = data.size()
+
+        cuda_storage = cuda_tensor.storage_type()(cuda_storage_size)
+
+        start_of_partition = cuda_storage_size * config["rank"]
+        end_of_partition = min(num_of_elements, cuda_storage_size * (config["rank"] + 1))
+
+        # FX: cuda_tensor_size < 0 if num_of_elements is too small
+        cuda_tensor_size = max(end_of_partition - start_of_partition, 0)
+
+        cuda_tensor.set_(cuda_storage, 0, (cuda_tensor_size,))
+        cuda_tensor.copy_(data.view(-1)[start_of_partition: end_of_partition])
+        ret = torch.Tensor._make_subclass(cls, cuda_tensor, requires_grad)
+        
+        setattr(ret, "_original_shape", original_shape)
+        setattr(ret, "_start_partition", start_of_partition)
+        setattr(ret, "_end_partition", end_of_partition)
+        setattr(ret, "_init_method", init_method)
+        setattr(ret, "_in_checkpoint_block", False)
+        setattr(ret, "_group", group)
+        setattr(ret, "_quant_state", quant_state)
+        
+        return ret
+
+    @property
+    def quant_state(self):
+        return self._quant_state
+    
+    @quant_state.setter
+    def quant_state(self, value):
+        self._quant_state = value
