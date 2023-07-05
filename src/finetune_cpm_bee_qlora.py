@@ -407,7 +407,6 @@ def show_state_dict(file):
             print("no quantstate")
             pass
     
-
 #按照compress_statistics和quant_type策略替换模型文件
 def quantize_state_dict(file, quantize_save, compress_statistics, quant_type):
     state_dict = torch.load(file)
@@ -764,7 +763,7 @@ def finetune(
 def main():
     args = initialize()
     # show_state_dict("/root/zhaoyq/models/1b/cpmbee_quantized.bin")
-    # quantize_state_dict("/root/gongbt/cpm-bee-hf/models_1b/pytorch_model.bin","/root/zhaoyq/models/1b/cpmbee_quantized.bin",True,"nf4")
+    # quantize_state_dict("/root/gongbt/cpm-bee-hf/models/pytorch_model.bin","/root/zhaoyq/models/10b/cpmbee_quantized.bin",True,"nf4")
     tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
     print("before finetune:",see_memory())
     finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
