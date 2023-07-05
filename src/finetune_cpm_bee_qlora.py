@@ -38,7 +38,7 @@ import os
 import psutil
 from cpm_live.layers.linear import Params4bit
 from cpm_live.layers.linear import Linear
-# from accelerate import init_empty_weights
+
 keep_in_fp32_modules = None
 quantization_config=BitsAndBytesConfig(
             load_in_4bit=True,#
@@ -51,150 +51,149 @@ quantization_config=BitsAndBytesConfig(
             llm_int8_skip_modules = None
         )
 
-
-def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name=None, quantization_config=None):
-    modules_to_not_convert = ["lm_head"] if modules_to_not_convert is None else modules_to_not_convert
-    for name, module in model.named_children():
-        if current_key_name is None:
-            current_key_name = []
-        # print(type(module)) 
-        if isinstance(module, Linear) and name not in modules_to_not_convert:
-            # Check if the current key is not in the `modules_to_not_convert`
-            # if not any(key in ".".join(current_key_name) for key in modules_to_not_convert):
-            if True:
-                # with init_empty_weights():
-                if quantization_config.quantization_method() == "llm_int8":
-                    model._modules[name] = bnb.nn.Linear8bitLt(
-                        module.in_features,
-                        module.out_features,
-                        None,
-                        has_fp16_weights=quantization_config.llm_int8_has_fp16_weight,
-                        threshold=quantization_config.llm_int8_threshold,
-                    )
-                else:
-                    if (
-                        quantization_config.llm_int8_skip_modules is not None
-                        and name in quantization_config.llm_int8_skip_modules
-                    ):
-                        pass
-                    else:
-                        import gc
-                        print("1:",see_memory())
+# def replace_with_bnb_linear(model, modules_to_not_convert=None, current_key_name=None, quantization_config=None):
+#     modules_to_not_convert = ["lm_head"] if modules_to_not_convert is None else modules_to_not_convert
+#     for name, module in model.named_children():
+#         if current_key_name is None:
+#             current_key_name = []
+#         # print(type(module)) 
+#         if isinstance(module, Linear) and name not in modules_to_not_convert:
+#             # Check if the current key is not in the `modules_to_not_convert`
+#             # if not any(key in ".".join(current_key_name) for key in modules_to_not_convert):
+#             if True:
+#                 # with init_empty_weights():
+#                 if quantization_config.quantization_method() == "llm_int8":
+#                     model._modules[name] = bnb.nn.Linear8bitLt(
+#                         module.in_features,
+#                         module.out_features,
+#                         None,
+#                         has_fp16_weights=quantization_config.llm_int8_has_fp16_weight,
+#                         threshold=quantization_config.llm_int8_threshold,
+#                     )
+#                 else:
+#                     if (
+#                         quantization_config.llm_int8_skip_modules is not None
+#                         and name in quantization_config.llm_int8_skip_modules
+#                     ):
+#                         pass
+#                     else:
+#                         import gc
+#                         print("1:",see_memory())
                         
-                        new_layer = bnb.nn.Linear4bit(
-                            module.in_features,
-                            module.out_features,
-                            # module.bias is not None,
-                            None,
-                            quantization_config.bnb_4bit_compute_dtype,
-                            compress_statistics=quantization_config.bnb_4bit_use_double_quant,
-                            quant_type=quantization_config.bnb_4bit_quant_type,
-                        )
-                        # print(new_layer.weight.dtype)
-                        # new_layer = nn.Linear(module.in_features,module.out_features).to(dtype=torch.float16)
-                        new_layer = new_layer.cuda()
+#                         new_layer = bnb.nn.Linear4bit(
+#                             module.in_features,
+#                             module.out_features,
+#                             # module.bias is not None,
+#                             None,
+#                             quantization_config.bnb_4bit_compute_dtype,
+#                             compress_statistics=quantization_config.bnb_4bit_use_double_quant,
+#                             quant_type=quantization_config.bnb_4bit_quant_type,
+#                         )
+#                         # print(new_layer.weight.dtype)
+#                         # new_layer = nn.Linear(module.in_features,module.out_features).to(dtype=torch.float16)
+#                         new_layer = new_layer.cuda()
                         
-                        model._modules[name] = new_layer
-                        for param_name, param in module.named_parameters():
-                            print(f'Parameter shape: {param.shape}\n')
-                        print("2:",see_memory())
-                        # exit(0)
-                    # Force requires grad to False to avoid unexpected errors
-                    model._modules[name].requires_grad_(False)
-        # Remove the last key for recursion
-        if len(list(module.children())) > 0:
-            replace_with_bnb_linear(
-                module,
-                modules_to_not_convert,
-                current_key_name,
-                quantization_config,
-            )
-    return model
+#                         model._modules[name] = new_layer
+#                         for param_name, param in module.named_parameters():
+#                             print(f'Parameter shape: {param.shape}\n')
+#                         print("2:",see_memory())
+#                         # exit(0)
+#                     # Force requires grad to False to avoid unexpected errors
+#                     model._modules[name].requires_grad_(False)
+#         # Remove the last key for recursion
+#         if len(list(module.children())) > 0:
+#             replace_with_bnb_linear(
+#                 module,
+#                 modules_to_not_convert,
+#                 current_key_name,
+#                 quantization_config,
+#             )
+#     return model
 
-def get_keys_to_not_convert(model):
-    # Create a copy of the model and tie the weights, then
-    # check if it contains tied weights
-    tied_model = deepcopy(model)  # this has 0 cost since it is done inside `init_empty_weights` context manager`
-    tied_model.tie_weights()
+# def get_keys_to_not_convert(model):
+#     # Create a copy of the model and tie the weights, then
+#     # check if it contains tied weights
+#     tied_model = deepcopy(model)  # this has 0 cost since it is done inside `init_empty_weights` context manager`
+#     tied_model.tie_weights()
 
-    tied_params = find_tied_parameters(tied_model)
-    # For compatibility with Accelerate < 0.18
-    if isinstance(tied_params, dict):
-        tied_keys = list(tied_params.values())
-    else:
-        tied_keys = sum([x[1:] for x in tied_params], [])
-    has_tied_params = len(tied_keys) > 0
+#     tied_params = find_tied_parameters(tied_model)
+#     # For compatibility with Accelerate < 0.18
+#     if isinstance(tied_params, dict):
+#         tied_keys = list(tied_params.values())
+#     else:
+#         tied_keys = sum([x[1:] for x in tied_params], [])
+#     has_tied_params = len(tied_keys) > 0
 
-    # Check if it is a base model
-    is_base_model = not hasattr(model, model.base_model_prefix)
+#     # Check if it is a base model
+#     is_base_model = not hasattr(model, model.base_model_prefix)
 
-    # Ignore this for base models (BertModel, GPT2Model, etc.)
-    if (not has_tied_params) and is_base_model:
-        return []
+#     # Ignore this for base models (BertModel, GPT2Model, etc.)
+#     if (not has_tied_params) and is_base_model:
+#         return []
 
-    # otherwise they have an attached head
-    list_modules = list(model.named_parameters())
-    list_last_module = [list_modules[-1][0]]
+#     # otherwise they have an attached head
+#     list_modules = list(model.named_parameters())
+#     list_last_module = [list_modules[-1][0]]
 
-    # add last module together with tied weights
-    intersection = set(list_last_module) - set(tied_keys)
-    list_untouched = tied_keys + list(intersection)
+#     # add last module together with tied weights
+#     intersection = set(list_last_module) - set(tied_keys)
+#     list_untouched = tied_keys + list(intersection)
 
-    # remove ".weight" from the keys
-    names_to_remove = [".weight", ".bias"]
-    filtered_module_names = []
-    for name in list_untouched:
-        for name_to_remove in names_to_remove:
-            if name_to_remove in name:
-                name = name.replace(name_to_remove, "")
-        filtered_module_names.append(name)
+#     # remove ".weight" from the keys
+#     names_to_remove = [".weight", ".bias"]
+#     filtered_module_names = []
+#     for name in list_untouched:
+#         for name_to_remove in names_to_remove:
+#             if name_to_remove in name:
+#                 name = name.replace(name_to_remove, "")
+#         filtered_module_names.append(name)
 
-    return filtered_module_names
+#     return filtered_module_names
 
-def apply_quantization(model, quantization_config, device_map=None):
-    # llm_int8_skip_modules = quantization_config.llm_int8_skip_modules
-    # load_in_8bit_fp32_cpu_offload = quantization_config.llm_int8_enable_fp32_cpu_offload
+# def apply_quantization(model, quantization_config, device_map=None):
+#     # llm_int8_skip_modules = quantization_config.llm_int8_skip_modules
+#     # load_in_8bit_fp32_cpu_offload = quantization_config.llm_int8_enable_fp32_cpu_offload
 
-    # logger = logging.getLogger(__name__)
-    # logger.info("Detected 8-bit loading: activating 8-bit loading for this model")
+#     # logger = logging.getLogger(__name__)
+#     # logger.info("Detected 8-bit loading: activating 8-bit loading for this model")
 
-    # We keep some modules such as the lm_head in their original dtype for numerical stability reasons
-    if quantization_config.llm_int8_skip_modules is None:
-        # modules_to_not_convert = get_keys_to_not_convert(model)
-        modules_to_not_convert = None
-        pass
-    else:
-        modules_to_not_convert = llm_int8_skip_modules
+#     # We keep some modules such as the lm_head in their original dtype for numerical stability reasons
+#     if quantization_config.llm_int8_skip_modules is None:
+#         # modules_to_not_convert = get_keys_to_not_convert(model)
+#         modules_to_not_convert = None
+#         pass
+#     else:
+#         modules_to_not_convert = llm_int8_skip_modules
 
-    if not isinstance(modules_to_not_convert, list):
-        modules_to_not_convert = [modules_to_not_convert]
+#     if not isinstance(modules_to_not_convert, list):
+#         modules_to_not_convert = [modules_to_not_convert]
 
-    # modules_to_not_convert.extend(keep_in_fp32_modules)
+#     # modules_to_not_convert.extend(keep_in_fp32_modules)
 
-    # Extend the modules to not convert to keys that are supposed to be offloaded to `cpu` or `disk`
-    if isinstance(device_map, dict) and len(device_map.keys()) > 1:
-        keys_on_cpu = [key for key, value in device_map.items() if value in ["disk", "cpu"]]
+#     # Extend the modules to not convert to keys that are supposed to be offloaded to `cpu` or `disk`
+#     if isinstance(device_map, dict) and len(device_map.keys()) > 1:
+#         keys_on_cpu = [key for key, value in device_map.items() if value in ["disk", "cpu"]]
 
-        if len(keys_on_cpu) > 0 and not load_in_8bit_fp32_cpu_offload:
-            raise ValueError("If you want to offload some keys to `cpu` or `disk`, you need to set "
-                             "`llm_int8_enable_fp32_cpu_offload=True`. Note that these modules will not be "
-                             "converted to 8-bit but kept in 32-bit.")
+#         if len(keys_on_cpu) > 0 and not load_in_8bit_fp32_cpu_offload:
+#             raise ValueError("If you want to offload some keys to `cpu` or `disk`, you need to set "
+#                              "`llm_int8_enable_fp32_cpu_offload=True`. Note that these modules will not be "
+#                              "converted to 8-bit but kept in 32-bit.")
 
-        modules_to_not_convert.extend(keys_on_cpu)
+#         modules_to_not_convert.extend(keys_on_cpu)
 
-    supports_4bit = version.parse(importlib_metadata.version("bitsandbytes")) >= version.parse("0.39.0")
+#     supports_4bit = version.parse(importlib_metadata.version("bitsandbytes")) >= version.parse("0.39.0")
 
-    if quantization_config.load_in_4bit and not supports_4bit:
-        raise ValueError("You have a version of `bitsandbytes` that is not compatible with 4bit inference and training."
-                         "Make sure you have the latest version of `bitsandbytes` installed.")
+#     if quantization_config.load_in_4bit and not supports_4bit:
+#         raise ValueError("You have a version of `bitsandbytes` that is not compatible with 4bit inference and training."
+#                          "Make sure you have the latest version of `bitsandbytes` installed.")
 
-    model = replace_with_bnb_linear(model, modules_to_not_convert=modules_to_not_convert,
-                                    quantization_config=quantization_config)
+#     model = replace_with_bnb_linear(model, modules_to_not_convert=modules_to_not_convert,
+#                                     quantization_config=quantization_config)
 
-    # # training in 8-bit is only available in 0.37.0+
-    # model._is_kbit_training_enabled = version.parse(importlib_metadata.version("bitsandbytes")) >= version.parse("0.37.0")
+#     # # training in 8-bit is only available in 0.37.0+
+#     # model._is_kbit_training_enabled = version.parse(importlib_metadata.version("bitsandbytes")) >= version.parse("0.37.0")
 
-    return model
+#     return model
 
 def get_tokenizer(args):
     tokenizer = CPMBeeTokenizer()
@@ -220,7 +219,7 @@ def get_model(args):
     model = CPMBee(config)
     print("after_init: ", see_cpu_memory())
     print("after_model_init: ",see_memory())
-
+    
     # exit(0)
     # print_model_dtype(model)
     # model = apply_quantization(model,quantization_config=quantization_config)
@@ -246,7 +245,6 @@ def get_model(args):
         for name, param in model.named_parameters():
             if name in state_dict and hasattr(state_dict[name], 'quant_state'):
                 param.quant_state = state_dict[name].quant_state
-
     else:
         bmt.init_parameters(model)
 
@@ -275,7 +273,7 @@ def get_model(args):
     #     if (param.dtype == torch.float16) or (param.dtype == torch.bfloat16):
     #         param.data = param.data.to(torch.float32)
             
-    insert LoRA
+    # insert LoRA
     if args.use_delta:
         delta_model = LoraModel(
             backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt"
@@ -409,6 +407,8 @@ def show_state_dict(file):
             print("no quantstate")
             pass
     
+
+#按照compress_statistics和quant_type策略替换模型文件
 def quantize_state_dict(file, quantize_save, compress_statistics, quant_type):
     state_dict = torch.load(file)
     replace_list = ["project_q", "project_k", "project_v", "attention_out", "w_0", "w_1", "w_out"]

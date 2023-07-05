@@ -68,7 +68,7 @@ class Linear4bit(bmt.DistributedModule):
         dim_out: int,
         compute_dtype: torch.dtype = None,
         compress_statistics: bool = True,
-        quant_type: str = 'fp4',
+        quant_type: str = 'nf4',
     ):
         super().__init__()
         self.dim_in = self.in_features = dim_in
@@ -88,11 +88,13 @@ class Linear4bit(bmt.DistributedModule):
         if getattr(self.weight, 'quant_state', None) is None:
             print('FP4 quantization state not initialized. Please call .cuda() or .to(device) on the LinearFP4 layer first.')
         inp_dtype = x.dtype
+        # print("x.dtype: ",x.dtype)
         # 先忽略compute_dtype的问题，因为似乎已经全都是float32,
         # if self.compute_dtype is not None:
         #     x = x.to(self.compute_dtype)
         out = bnb.matmul_4bit(x, self.weight.t(), bias=None, quant_state=self.weight.quant_state)
-        out = out.to(inp_dtype)
+        # out = out.to(inp_dtype)
+        out = out / math.sqrt(self.dim_in)
         return out
 
 class Params4bit(torch.nn.Parameter):
