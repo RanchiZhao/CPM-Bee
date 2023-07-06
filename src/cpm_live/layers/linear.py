@@ -163,8 +163,7 @@ class Params4bit(torch.nn.Parameter):
             return new_param
         self.data.copy_(data.view(-1)[self._start_partition : self._end_partition])
     
-
-
+    
 class DistributedParameter4Int8(bmt.DistributedParameter):
     r"""
     DistributedParameter is a subclass of torch.nn.Parameter.
