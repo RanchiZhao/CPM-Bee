@@ -261,7 +261,8 @@ def evaluation(model, args, tokenizer, loss_func):
                 ext_table_ids,
                 ext_table_sub,
             )
-
+            ### add here
+            targets = targets.long()
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
             if skip_this_batch:
                 loss = loss * 0
@@ -279,6 +280,7 @@ def finetune(
     optim_manager: bmt.optim.OptimManager,
 ):
     average_time = bmt.utils.AverageRecorder()
+
     if model.config.dtype == torch.half:
         loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
     else:
@@ -496,6 +498,7 @@ def finetune(
                         else:
                             state_dict = model.state_dict()
                             if bmt.rank() == 0:
+                                print("saving_now")
                                 torch.save(state_dict, os.path.join(args.save, args.save_name + "-delta-best.pt"))
                 else:
                     eval_loss_increase += 1
