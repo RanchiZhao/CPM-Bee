@@ -25,9 +25,10 @@ def main():
     ckpt_path = "path/to/checkpoint.pt"
     tokenizer = CPMBeeTokenizer()
     model = CPMBeeTorch(config=config)
-
+    model.load_state_dict(torch.load(ckpt_path), strict=False)
+    
     if args.delta is not None:
-        delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="hf")
+        delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt")
         model.load_state_dict(torch.load(args.delta), strict=False)
 
     model.load_state_dict(torch.load(ckpt_path), strict=False)
