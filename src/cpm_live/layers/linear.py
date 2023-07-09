@@ -86,14 +86,18 @@ class Linear4bit(bmt.DistributedModule):
     def forward(self, x: torch.Tensor):
         # weights are cast automatically as Int8Params, but the bias has to be cast manually
         if getattr(self.weight, 'quant_state', None) is None:
-            print('FP4 quantization state not initialized. Please call .cuda() or .to(device) on the LinearFP4 layer first.')
+            print('quantization state not initialized. Please ensure that the model parameters you load include the quant_state attribute.')
         inp_dtype = x.dtype
-        # print("x.dtype: ",x.dtype)
-        # 先忽略compute_dtype的问题，因为似乎已经全都是float32,
-        # if self.compute_dtype is not None:
-        #     x = x.to(self.compute_dtype)
+        dtype_dict = {
+            'torch.float32': torch.float32,
+            'torch.float16': torch.float16,
+        }
+        if self.compute_dtype is not None:
+            if isinstance(self.compute_dtype, str):
+                self.compute_dtype = dtype_dict[self.compute_dtype]
+            x = x.to(dtype=self.compute_dtype)
         out = bnb.matmul_4bit(x, self.weight.t(), bias=None, quant_state=self.weight.quant_state)
-        # out = out.to(inp_dtype)
+        out = out.to(inp_dtype)
         out = out / math.sqrt(self.dim_in)
         return out
 
