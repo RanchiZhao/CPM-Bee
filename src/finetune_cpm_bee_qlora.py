@@ -456,11 +456,11 @@ def finetune(
             )
             ### change here
             # not available for std and var only support floating point and complex dtypes
-            if iteration % args.inspect_iters == 0:
-                model_inspect = bmt.inspect.inspect_model(model, "*")
-                bmt.print_rank(bmt.inspect.format_summary(model_inspect))
-                train_info["model_inspect"] = model_inspect
-                print(train_info["mem_usage"])
+            # if iteration % args.inspect_iters == 0:
+            #     model_inspect = bmt.inspect.inspect_model(model, "*")
+            #     bmt.print_rank(bmt.inspect.format_summary(model_inspect))
+            #     train_info["model_inspect"] = model_inspect
+            #     print(train_info["mem_usage"])
 
             # write log here
             if args.tensorboard is not None and bmt.rank() == 0:

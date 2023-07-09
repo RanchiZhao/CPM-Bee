@@ -30,7 +30,23 @@ $ python quantize_state_dict.py --input-path your_cpmbee_model.bin --output-path
     "quant_type" : "nf4"
 ```
 
-下面，其余部分就可以参考基础微调教程。注意在你的微调脚本中记得讲`--load`替换为
+最后，其余部分就可以参考基础微调教程来完成。
+
+注意在你的微调脚本中记得讲`--load`替换为
 
 `your_cpmbee_quantize_model.bin`
+
+另外，由于dtype的限制，你需要注释掉inspect部分的代码，
+
+```python
+if iteration % args.inspect_iters == 0:
+                model_inspect = bmt.inspect.inspect_model(model, "*")
+                bmt.print_rank(bmt.inspect.format_summary(model_inspect))
+                train_info["model_inspect"] = model_inspect
+                print(train_info["mem_usage"])
+```
+
+否则会报错：
+
+`not available for std and var only support floating point and complex dtypes`
 
