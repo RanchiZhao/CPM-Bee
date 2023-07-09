@@ -64,23 +64,7 @@ def get_model(args):
                 param.quant_state = state_dict[name].quant_state
     else:
         bmt.init_parameters(model)
-    
-    with open('/root/zhaoyq/model.txt', 'w') as f:
-        for name, module in model.named_modules():
-            f.write(f'Module name: {name}\n')
-            f.write(f'Module type: {type(module).__name__}\n')
-            
-            for param_name, param in module.named_parameters():
-                f.write(f'Parameter name: {param_name}\n')
-                f.write(f'Parameter shape: {param.shape}\n')
-                f.write(f'Parameter requires_grad: {param.requires_grad}\n')
-                f.write(f'Parameter: {param[:10]}\n')
-                try:
-                    f.write(f'quant_state: {param.quant_state}\n')
-                except:
-                    raise ValueError
-            f.write('\n') 
-            
+        
     # insert LoRA
     if args.use_delta:
         delta_model = LoraModel(
