@@ -5,6 +5,7 @@ from cpm_live.tokenizers import CPMBeeTokenizer
 from opendelta import LoraModel
 import bmtrain as bmt
 import torch
+import time
 
 def parse_args():
     parser = ArgumentParser()
@@ -36,16 +37,28 @@ def see_memory(detail=False):
     torch.cuda.reset_peak_memory_stats()
     return res
 
+def count_tokens(text, tokenizer):
+    token_ids, _ = tokenizer.encode(text)
+    return len(token_ids)
+
+
 import os 
 
 def main():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     args = parse_args()
-
+    print(see_memory())
 
     data_list = [
-        {"input": "观山观水都能领略妙趣。", "options": {"<option_0>": "我来观水复观山", "<option_1>": "观水观山皆得妙", "<option_2>": "观书已若观山水", "<option_3>": "观水观山凭认取"}, "question": "这段话形容了哪句诗的意境？", "<ans>": ""},
-    ]
+        {"prompt": "以中华民族伟大复兴为主题写一篇1000字的文章。", "<ans>": ""}
+   ]
+    
+    # bmt.init_distributed(seed=1234)
+    # config = CPMBeeConfig.from_json_file("/root/zhaoyq/models/10b/cpm-bee-10b.json")
+    # ckpt_path = "/root/gongbt/cpm-bee-hf/models/pytorch_model.bin"
+    # tokenizer = CPMBeeTokenizer()
+    # model = CPMBeeTorch(config=config)
+    # model.load_state_dict(torch.load(ckpt_path), strict=False)
 
     bmt.init_distributed(seed=1234)
     config = CPMBeeConfig.from_json_file("/root/zhaoyq/models/10b/cpm-bee-10b.json")
@@ -58,30 +71,13 @@ def main():
     for name, param in model.named_parameters():
         if name in state_dict and hasattr(state_dict[name], 'quant_state'):
             param.quant_state = state_dict[name].quant_state
-
-    with open('/root/zhaoyq/model.txt', 'w') as f:
-        for name, module in model.named_modules():
-            f.write(f'Module name: {name}\n')
-            f.write(f'Module type: {type(module).__name__}\n')
-            
-            for param_name, param in module.named_parameters():
-                f.write(f'Parameter name: {param_name}\n')
-                f.write(f'Parameter shape: {param.shape}\n')
-                f.write(f'Parameter requires_grad: {param.requires_grad}\n')
-                f.write(f'Parameter: {param[:10]}\n')
-                try:
-                    f.write(f'quant_state: {param.quant_state}\n')
-                except:
-                    raise ValueError
-            f.write('\n') 
     
     if args.delta is not None:
         delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt")
         model.load_state_dict(torch.load(args.delta), strict=False)
 
     if args.device == "cpu":
-        #model = model.float()
-        pass
+        model = model.float()
     else:
         if not torch.cuda.is_available():
             raise AssertionError("The CUDA is unavailable")
@@ -91,13 +87,27 @@ def main():
                 model = bminf.wrapper(model, quantization=False, memory_limit=args.memory_limit << 30)
         model.cuda(args.device)
 
-    # use beam search
     beam_search = CPMBeeBeamSearch(
         model=model,
         tokenizer=tokenizer,
     )
-    inference_results = beam_search.generate(data_list, max_length=100, repetition_penalty=1.1)
-    for res in inference_results:
+
+    print(see_memory())
+    start_time = time.time()
+    total_tokens = 0
+    result_list = []
+
+    for data in data_list:
+        result = beam_search.generate([data], max_length=100, repetition_penalty=1.1)
+        total_tokens += count_tokens(result[0]['<ans>'], tokenizer)  
+        result_list.append(result)
+
+    end_time = time.time()
+    print(see_memory())
+    elapsed_time = end_time - start_time
+    print(f'生成了 {total_tokens} 个tokens, 耗时 {elapsed_time} 秒，推理速度为 {total_tokens / elapsed_time} tokens/秒')
+
+    for res in result_list:
         print(res)
 
 if __name__ == "__main__":
