@@ -352,6 +352,8 @@ def finetune(
                 ext_table_ids,
                 ext_table_sub,
             )
+            print(targets.long().view(-1))
+            exit(0)
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.long().view(-1))
             if skip_this_batch:
                 loss = loss * 0
