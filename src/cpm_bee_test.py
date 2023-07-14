@@ -282,7 +282,7 @@ def finetune(
                 ext_table_ids,
                 ext_table_sub,
             )
-            outputs = CookTrainer.forward(model, loss_func, targets, **data)
+            outputs = CookTrainer.forward(model, loss_func, targets, input_ids, input_ids_sub, input_length, input_context, input_sample_ids, input_num_segments, input_segment_ids, input_segment_rel_offset, input_segment_rel, input_span, ext_table_ids, ext_table_sub)
             loss = outputs.loss
 
             mem_usage, tim_usage = add_mem_time("forward", mem_usage, tim_usage)
@@ -403,7 +403,7 @@ def finetune(
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, global_steps)
 
-            bmcook.save( model, args.save_name, mode="quant")  # use this to save compressed model, choose mode == "quant" or "prune" to save quantized model or pruned model.
+            bmcook.save(model, args.save_name, mode="quant")  # use this to save compressed model, choose mode == "quant" or "prune" to save quantized model or pruned model.
     # end of finetune
 
 def main():
