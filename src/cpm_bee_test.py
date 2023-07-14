@@ -232,6 +232,8 @@ def finetune(
         last_data = None
         for iteration, data in enumerate(dataloader):
             iteration = iteration + 1
+            if global_steps >= args.train_iters:
+                break
             global_steps = global_steps + 1
             skip_this_batch = False
             if data is None:
@@ -403,7 +405,7 @@ def finetune(
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, global_steps)
 
-            bmcook.save(model, args.save_name, mode="quant")  # use this to save compressed model, choose mode == "quant" or "prune" to save quantized model or pruned model.
+    bmcook.save(model, args.save_name, mode="quant")  # use this to save compressed model, choose mode == "quant" or "prune" to save quantized model or pruned model.
     # end of finetune
 
 def main():

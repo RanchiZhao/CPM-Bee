@@ -5,7 +5,7 @@ GPUS_PER_NODE=8
 
 NNODES=1
 MASTER_ADDR="localhost"
-MASTER_PORT=12345
+MASTER_PORT=12347
 
 OPTS=""
 OPTS+=" --model-config /root/zhaoyq/models/10b/cpm-bee-10b.json"
@@ -26,6 +26,7 @@ OPTS+=" --weight-decay 0.01"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --loss-scale 32768"
 OPTS+=" --start-step 0"
+OPTS+=" --train-iters 30"
 
 CMD="torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS_PER_NODE} --rdzv_id=1 --rdzv_backend=c10d --rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} /root/zhaoyq/CPM-Bee/src/cpm_bee_test.py ${OPTS}"
 
