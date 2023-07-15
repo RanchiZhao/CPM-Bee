@@ -22,6 +22,7 @@ from typing import Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
+from cpm_live.layers.linear import Linear
 from cpm_live.arguments_cook import get_args
 from cpm_live.utils import allgather_objects
 from cpm_live.training_tasks.bee import FinetuneDataset
@@ -198,7 +199,7 @@ def finetune(
     if distill_config['ce_scale'] + distill_config['mse_hidn_scale'] + distill_config['mse_att_scale'] == 0:
         do_distill = False
     
-    CookTrainer.set_compression(cook_config, model, optimizer, teacher=teacher)
+    CookTrainer.set_compression(cook_config, model, optimizer, teacher=teacher,quant_layer_cls=Linear)
 
     average_time = bmt.utils.AverageRecorder()
     if model.config.dtype == torch.half:
