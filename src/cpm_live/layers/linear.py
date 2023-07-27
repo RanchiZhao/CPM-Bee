@@ -22,7 +22,6 @@ from typing import TypeVar,overload,Optional,Union,Callable,Any
 from torch import Tensor, device, dtype
 from bmtrain.utils import round_up
 from bmtrain.global_var import config
-from bmtrain.parameter import OpAllGather
 T = TypeVar("T", bound="torch.nn.Module")
 
 class Linear(bmt.DistributedModule):
@@ -165,9 +164,7 @@ class Params4bit(torch.nn.Parameter):
                                    quant_type=self.quant_type)
 
             return new_param
-        self.data.copy_(data.view(-1)[self._start_partition : self._end_partition])
-    
-    
+
 class DistributedParameter4Int8(bmt.DistributedParameter):
     r"""
     DistributedParameter is a subclass of torch.nn.Parameter.

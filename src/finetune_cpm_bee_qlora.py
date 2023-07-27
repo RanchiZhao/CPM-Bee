@@ -65,6 +65,8 @@ def get_model(args):
     else:
         bmt.init_parameters(model)
         
+    #
+
     # insert LoRA
     if args.use_delta:
         delta_model = LoraModel(
@@ -72,6 +74,8 @@ def get_model(args):
         )
         delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
         delta_model.log()
+
+    #
     return model
 
 def get_optimizer(args, model):

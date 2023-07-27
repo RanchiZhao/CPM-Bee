@@ -140,7 +140,7 @@ class FeedForward(bmt.DistributedModule):
                 compute_dtype=compute_dtype,
                 compress_statistics=compress_statistics,
                 quant_type=quant_type,
-        )
+        )i
 
 
     def forward(self, x: torch.Tensor):
